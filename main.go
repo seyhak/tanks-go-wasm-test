@@ -73,14 +73,30 @@ var DefaultGameState = TanksGameState{
 //	}
 
 // settings TanksDefaultSettings
-func GetDefaultGameState(this js.Value, settings js.Value) TanksGameState {
-	state := DefaultGameState
-	state.PlayersState = map[int]PlayerState{
-		0: getDefaultPlayerState(0, settings),
-		1: getDefaultPlayerState(1, settings),
-	}
-	return state
-}
+// func GetDefaultGameState(this js.Value, settings js.Value) interface{} {
+// 	// state := DefaultGameState
+// 	state := js.Global().Get("Object").New()
+// 	state.Set("Player", 0)
+// 	state.Set("WindX", 120)
+// 	state.Set("WindX", 120)
+// 	WindX:       120,
+// 	Turn:        0,
+// 	BulletPaths: [][]Coordinates{},
+// 	Hits:        []Hit{},
+// 	state.PlayersState = map[int]PlayerState{
+// 		0: getDefaultPlayerState(this, 0, settings),
+// 		1: getDefaultPlayerState(this, 1, settings),
+// 	}
+// 	arr := js.Global().Get("Array").New()
+
+// 	arr.Set(0, getDefaultPlayerState(this, 0, settings))
+// 	arr.Set(1, getDefaultPlayerState(this, 1, settings))
+// 	arr.Set("X", x)
+// 	arr.Set("Y", y)
+// 	arr.Set("HP", max_hp)
+// 	return obj
+// 	return state
+// }
 
 // const getDefaultPlayerState = (
 //
@@ -97,21 +113,29 @@ func GetDefaultGameState(this js.Value, settings js.Value) TanksGameState {
 //	}
 //
 // func getDefaultPlayerState(index int, settings TanksDefaultSettings) PlayerState {
-func getDefaultPlayerState(index int, settings js.Value) interface{} {
-	x := 100
-	width := settings.Get("WIDTH").Int()
-	y := settings.Get("Y").Int()
-	max_hp := settings.Get("MAX_HP").Int()
-	if index != 0 {
-		x = width - 150
-	}
-	return PlayerState{
-		X:           x,
-		Y:           y,
-		CannonAngle: 0,
-		HP:          max_hp,
-	}
-}
+// func getDefaultPlayerState(this js.Value, index int, settings js.Value) interface{} {
+// 	x := 100
+// 	width := settings.Get("WIDTH").Int()
+// 	y := settings.Get("Y").Int()
+// 	max_hp := settings.Get("MAX_HP").Int()
+// 	if index != 0 {
+// 		x = width - 150
+// 	}
+// 	obj := js.Global().Get("Object").New()
+
+// 	obj.Set("message", "Hello from Go!")
+// 	obj.Set("cannonAngle", 0)
+// 	obj.Set("X", x)
+// 	obj.Set("Y", y)
+// 	obj.Set("HP", max_hp)
+// 	return obj
+// 	// return PlayerState{
+// 	// 	X:           x,
+// 	// 	Y:           y,
+// 	// 	CannonAngle: 0,
+// 	// 	HP:          max_hp,
+// 	// }
+// }
 
 // const handlePlayersStateValueChange = (
 //
@@ -233,16 +257,20 @@ func getYInT(t, alfa, v0 float64) float64 {
 //	    }
 //	  }
 //	}
-func getBulletPath(wind, angle int) []Coordinates {
+func GetBulletPath(this js.Value, jsArgs []js.Value) interface{} {
+	// wind := jsArgs[0].Int()
+	V0 := jsArgs[2].Int()
+	angle := jsArgs[1].Int()
 	const (
 		BULLET_MASS = 10
 		INTERVAL    = 0.01
-		V0          = 100
 		FLOOR_LVL   = -100
 	)
 
 	var t float64 = INTERVAL
 	result := []Coordinates{{X: 0, Y: 0}}
+
+	jsArray := js.Global().Get("Array").New()
 
 	for {
 		nextResult := Coordinates{
@@ -250,10 +278,14 @@ func getBulletPath(wind, angle int) []Coordinates {
 			Y: getYInT(t, float64(angle), float64(V0)),
 		}
 		result = append(result, nextResult)
+		obj := js.Global().Get("Object").New()
+		obj.Set("X", nextResult.X)
+		obj.Set("Y", nextResult.Y)
+		jsArray.Call("push", obj)
 		t += INTERVAL
 
 		if nextResult.Y <= FLOOR_LVL {
-			return result
+			return jsArray
 		}
 	}
 }
@@ -466,62 +498,62 @@ func updatePlayersStateHealthByHit(gameState TanksGameState, hit Hit) map[int]Pl
 //	  })
 //	  return nextState
 //	}
-func HandleEvent(this js.Value, jsArgs []js.Value) TanksGameState {
-	event := jsArgs[0]
-	prevState := jsArgs[1]
-	var updated map[string]interface{}
-	player := prevState.Player
+// func HandleEvent(this js.Value, jsArgs []js.Value) TanksGameState {
+// 	event := jsArgs[0]
+// 	prevState := jsArgs[1]
+// 	var updated map[string]interface{}
+// 	player := prevState.Player
 
-	switch event {
-	case EVENTS["UP"]:
-		prevState = handlePlayersStateValueChange(prevState, "cannonAngle", -1, 5)
-	case EVENTS["DOWN"]:
-		prevState = handlePlayersStateValueChange(prevState, "cannonAngle", 1, 5)
-	case EVENTS["LEFT"]:
-		prevState = handlePlayersStateValueChange(prevState, "X", -1, 5)
-	case EVENTS["RIGHT"]:
-		prevState = handlePlayersStateValueChange(prevState, "X", 1, 5)
-	case EVENTS["FIRE"]:
-		player = 1 - prevState.Player
-		nextPath := getBulletPath(prevState.WindX, prevState.PlayersState[prevState.Player].CannonAngle)
-		hit := getHits(prevState, nextPath)
+// 	switch event {
+// 	case EVENTS["UP"]:
+// 		prevState = handlePlayersStateValueChange(prevState, "cannonAngle", -1, 5)
+// 	case EVENTS["DOWN"]:
+// 		prevState = handlePlayersStateValueChange(prevState, "cannonAngle", 1, 5)
+// 	case EVENTS["LEFT"]:
+// 		prevState = handlePlayersStateValueChange(prevState, "X", -1, 5)
+// 	case EVENTS["RIGHT"]:
+// 		prevState = handlePlayersStateValueChange(prevState, "X", 1, 5)
+// 	case EVENTS["FIRE"]:
+// 		player = 1 - prevState.Player
+// 		nextPath := getBulletPath(prevState.WindX, prevState.PlayersState[prevState.Player].CannonAngle)
+// 		hit := getHits(prevState, nextPath)
 
-		playersState := prevState.PlayersState
-		if hit != nil {
-			playersState = updatePlayersStateHealthByHit(prevState, *hit)
-		}
-		updated = map[string]interface{}{
-			"playersState": playersState,
-			"windX":        handleWindChange(),
-			"bulletPaths":  append(prevState.BulletPaths, nextPath),
-			"hits": func() []Hit {
-				if hit != nil {
-					return append(prevState.Hits, *hit)
-				}
-				return prevState.Hits
-			}(),
-		}
-	default:
-		return prevState
-	}
+// 		playersState := prevState.PlayersState
+// 		if hit != nil {
+// 			playersState = updatePlayersStateHealthByHit(prevState, *hit)
+// 		}
+// 		updated = map[string]interface{}{
+// 			"playersState": playersState,
+// 			"windX":        handleWindChange(),
+// 			"bulletPaths":  append(prevState.BulletPaths, nextPath),
+// 			"hits": func() []Hit {
+// 				if hit != nil {
+// 					return append(prevState.Hits, *hit)
+// 				}
+// 				return prevState.Hits
+// 			}(),
+// 		}
+// 	default:
+// 		return prevState
+// 	}
 
-	prevState.Player = player
-	for k, v := range updated {
-		switch k {
-		case "playersState":
-			prevState.PlayersState = v.(map[int]PlayerState)
-		case "windX":
-			prevState.WindX = v.(int)
-		case "bulletPaths":
-			prevState.BulletPaths = v.([][]Coordinates)
-		case "hits":
-			prevState.Hits = v.([]Hit)
-		}
-	}
-	return prevState
-}
+// 	prevState.Player = player
+// 	for k, v := range updated {
+// 		switch k {
+// 		case "playersState":
+// 			prevState.PlayersState = v.(map[int]PlayerState)
+// 		case "windX":
+// 			prevState.WindX = v.(int)
+// 		case "bulletPaths":
+// 			prevState.BulletPaths = v.([][]Coordinates)
+// 		case "hits":
+// 			prevState.Hits = v.([]Hit)
+// 		}
+// 	}
+// 	return prevState
+// }
 
-func Test() string {
+func Test(this js.Value, args []js.Value) interface{} {
 	fmt.Println("Hello WASM")
 	return "Hello WASM"
 }
@@ -537,8 +569,9 @@ func main() {
 	done := make(chan struct{}, 0)
 
 	// Expose the Go function `fibonacciSum` to JavaScript
-	js.Global().Set("handleEvent", js.FuncOf(HandleEvent))
-	js.Global().Set("getDefaultGameState", js.FuncOf(GetDefaultGameState))
+	js.Global().Set("getBulletPath", js.FuncOf(GetBulletPath))
+	js.Global().Set("Test", js.FuncOf(Test))
+	// js.Global().Set("getDefaultGameState", js.FuncOf(GetDefaultGameState))
 
 	// Block the program from exiting
 	<-done
