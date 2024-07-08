@@ -1,0 +1,298 @@
+package main
+
+import (
+	"fmt"
+	"math"
+	"math/rand"
+	"time"
+)
+
+type TanksGameState struct {
+	Player       int
+	WindX        int
+	Turn         int
+	BulletPaths  [][]Coordinates
+	Hits         []Hit
+	PlayersState map[int]PlayerState
+}
+
+type PlayerState struct {
+	X           int
+	Y           int
+	CannonAngle int
+	HP          int
+}
+
+type TanksDefaultSettings struct {
+	Width int
+	Y     int
+	MaxHP int
+}
+
+type Coordinates struct {
+	X float64
+	Y float64
+}
+
+type Hit struct {
+	Turn      int
+	HitPlayer int
+}
+
+type EventsValues int
+
+const (
+	UP EventsValues = iota
+	DOWN
+	LEFT
+	RIGHT
+	FIRE
+)
+
+var DefaultGameState = TanksGameState{
+	Player:      0,
+	WindX:       120,
+	Turn:        0,
+	BulletPaths: [][]Coordinates{},
+	Hits:        []Hit{},
+}
+
+func getDefaultPlayerState(index int, settings TanksDefaultSettings) PlayerState {
+	x := 100
+	if index != 0 {
+		x = settings.Width - 150
+	}
+	return PlayerState{
+		X:           x,
+		Y:           settings.Y,
+		CannonAngle: 0,
+		HP:          settings.MaxHP,
+	}
+}
+
+func getDefaultGameState(settings TanksDefaultSettings) TanksGameState {
+	state := DefaultGameState
+	state.PlayersState = map[int]PlayerState{
+		0: getDefaultPlayerState(0, settings),
+		1: getDefaultPlayerState(1, settings),
+	}
+	return state
+}
+
+func handlePlayersStateValueChange(prevState TanksGameState, key string, multiplier, step int) TanksGameState {
+	if multiplier == 0 {
+		multiplier = 1
+	}
+	if step == 0 {
+		step = 5
+	}
+
+	currentValue := prevState.PlayersState[prevState.Player]
+	var nextValue int
+	switch key {
+	case "X":
+		nextValue = currentValue.X + step*multiplier
+	case "cannonAngle":
+		nextValue = currentValue.CannonAngle + step*multiplier
+	}
+
+	isNextValueOutOfCannonAngle := key == "cannonAngle" && (math.Abs(float64(nextValue)) > 90 || nextValue > 0)
+	if isNextValueOutOfCannonAngle {
+		return prevState
+	}
+
+	newPlayersState := prevState.PlayersState
+	if key == "X" {
+		newPlayersState[prevState.Player] = PlayerState{X: nextValue, Y: currentValue.Y, CannonAngle: currentValue.CannonAngle, HP: currentValue.HP}
+	} else if key == "cannonAngle" {
+		newPlayersState[prevState.Player] = PlayerState{X: currentValue.X, Y: currentValue.Y, CannonAngle: nextValue, HP: currentValue.HP}
+	}
+
+	prevState.PlayersState = newPlayersState
+	return prevState
+}
+
+func handleWindChange() int {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Intn(401) - 200
+}
+
+func getDegreeToRadians(degree float64) float64 {
+	constant := 0.0174532925
+	return constant * math.Abs(degree)
+}
+
+func getXInT(t, alfa, v0 float64) float64 {
+	return v0 * t * math.Cos(getDegreeToRadians(alfa))
+}
+
+func getYInT(t, alfa, v0 float64) float64 {
+	const g = 9.8
+	return v0*t*math.Sin(getDegreeToRadians(alfa)) - (g*math.Pow(t, 2))/2
+}
+
+func getBulletPath(wind, angle int) []Coordinates {
+	const (
+		bulletMass = 10
+		interval   = 0.01
+		v0         = 100
+		floorLvl   = -100
+	)
+
+	var t float64 = interval
+	result := []Coordinates{{X: 0, Y: 0}}
+
+	for {
+		nextResult := Coordinates{
+			X: getXInT(t, float64(angle), float64(v0)),
+			Y: getYInT(t, float64(angle), float64(v0)),
+		}
+		result = append(result, nextResult)
+		t += interval
+
+		if nextResult.Y <= floorLvl {
+			return result
+		}
+	}
+}
+
+func getHits(gameState TanksGameState, nextPath []Coordinates) *Hit {
+	const (
+		tankWidth    = 150
+		tankHeight   = 100
+		playersCount = 2
+	)
+
+	currentPlayerPosition := Coordinates{
+		X: float64(gameState.PlayersState[gameState.Player].X + tankWidth),
+		Y: float64(gameState.PlayersState[gameState.Player].Y),
+	}
+
+	hitBoundariesP0X := [2]int{
+		gameState.PlayersState[0].X - tankWidth,
+		gameState.PlayersState[0].X + tankWidth,
+	}
+	hitBoundariesP1X := [2]int{
+		gameState.PlayersState[1].X - tankWidth,
+		gameState.PlayersState[1].X + tankWidth,
+	}
+	hitBoundariesP0Y := [2]int{
+		gameState.PlayersState[0].Y,
+		gameState.PlayersState[0].Y + tankHeight,
+	}
+	hitBoundariesP1Y := [2]int{
+		gameState.PlayersState[1].Y,
+		gameState.PlayersState[1].Y + tankHeight,
+	}
+
+	pXs := [2][2]int{hitBoundariesP0X, hitBoundariesP1X}
+	pYs := [2][2]int{hitBoundariesP0Y, hitBoundariesP1Y}
+
+	for _, coord := range nextPath {
+		xP0 := coord.X + currentPlayerPosition.X
+		xP1 := -coord.X + currentPlayerPosition.X - float64(tankWidth*2)
+		y := -coord.Y
+		var xHitPlayer *int
+		yHit := false
+
+		for j := 0; j < playersCount; j++ {
+			playerX := pXs[j]
+
+			if (xP0 > float64(playerX[0]) && xP0 < float64(playerX[1])) || (xP1 > float64(playerX[0]) && xP1 < float64(playerX[1])) {
+				xHitPlayer = &j
+			}
+		}
+		for j := 0; j < playersCount; j++ {
+			playerY := pYs[j]
+
+			if y > float64(playerY[0]) && y < float64(playerY[1]) {
+				yHit = true
+			}
+		}
+
+		if xHitPlayer != nil && yHit {
+			return &Hit{
+				Turn:      gameState.Turn,
+				HitPlayer: *xHitPlayer,
+			}
+		}
+	}
+	return nil
+}
+
+func updatePlayersStateHealthByHit(gameState TanksGameState, hit Hit) map[int]PlayerState {
+	player := hit.HitPlayer
+	updatedHP := gameState.PlayersState[player].HP - 1
+	newPlayersState := gameState.PlayersState
+	newPlayersState[player] = PlayerState{
+		X:           newPlayersState[player].X,
+		Y:           newPlayersState[player].Y,
+		CannonAngle: newPlayersState[player].CannonAngle,
+		HP:          updatedHP,
+	}
+	return newPlayersState
+}
+
+func handleEvent(event EventsValues, prevState TanksGameState) TanksGameState {
+	var updated map[string]interface{}
+	player := prevState.Player
+
+	switch event {
+	case UP:
+		prevState = handlePlayersStateValueChange(prevState, "cannonAngle", -1, 5)
+	case DOWN:
+		prevState = handlePlayersStateValueChange(prevState, "cannonAngle", 1, 5)
+	case LEFT:
+		prevState = handlePlayersStateValueChange(prevState, "X", -1, 5)
+	case RIGHT:
+		prevState = handlePlayersStateValueChange(prevState, "X", 1, 5)
+	case FIRE:
+		player = 1 - prevState.Player
+		nextPath := getBulletPath(prevState.WindX, prevState.PlayersState[prevState.Player].CannonAngle)
+		hit := getHits(prevState, nextPath)
+		fmt.Println("hit:", hit)
+		playersState := prevState.PlayersState
+		if hit != nil {
+			playersState = updatePlayersStateHealthByHit(prevState, *hit)
+		}
+		updated = map[string]interface{}{
+			"playersState": playersState,
+			"windX":        handleWindChange(),
+			"bulletPaths":  append(prevState.BulletPaths, nextPath),
+			"hits": func() []Hit {
+				if hit != nil {
+					return append(prevState.Hits, *hit)
+				}
+				return prevState.Hits
+			}(),
+		}
+		fmt.Println("updated:", updated)
+	default:
+		return prevState
+	}
+
+	prevState.Player = player
+	if updated != nil {
+		for k, v := range updated {
+			switch k {
+			case "playersState":
+				prevState.PlayersState = v.(map[int]PlayerState)
+			case "windX":
+				prevState.WindX = v.(int)
+			case "bulletPaths":
+				prevState.BulletPaths = v.([][]Coordinates)
+			case "hits":
+				prevState.Hits = v.([]Hit)
+			}
+		}
+	}
+	return prevState
+}
+
+func _main() {
+	settings := TanksDefaultSettings{Width: 800, Y: 300, MaxHP: 100}
+	gameState := getDefaultGameState(settings)
+	fmt.Printf("Initial Game State: %+v\n", gameState)
+	gameState = handleEvent(UP, gameState)
+	fmt.Printf("Game State after UP event: %+v\n", gameState)
+}
