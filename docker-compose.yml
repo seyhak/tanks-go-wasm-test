@@ -1,7 +1,8 @@
 services:
   gotanks:
-    build: Dockerfile
+    build:
+      dockerfile: ./Dockerfile
     volumes:
-      -.:/usr/src/app
+      - .:/usr/src/app
     stdin_open: true
     tty: true
